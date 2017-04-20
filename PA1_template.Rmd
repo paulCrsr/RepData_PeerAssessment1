@@ -5,21 +5,84 @@ output:
     keep_md: true
 ---
 
+<style>
+   th,td{
+     padding: 2px 5px 2px 5px;
+   }
+</style>
 
 ## Loading and preprocessing the data
 
+```{r loadData}
+unzip("activity.zip")
+activity <- read.csv("activity.csv")
+str(activity)
+```
 
 
 ## What is mean total number of steps taken per day?
 
+```{r stepsByDay}
+library(dplyr, warn.conflicts=FALSE)
 
+stepsByDay <- 
+    group_by(activity, date) %>%
+    summarise_each(funs(sum(., na.rm=TRUE)), -interval)
+```
+
+### Histogram of steps by day
+```{r hist1}
+hist(stepsByDay$steps, main="Histogram of steps per day", xlab="Daily steps", ylab="Frequency [Days]", breaks=15)
+
+meanStepsPerDay <- mean(stepsByDay$steps)
+abline(v=meanStepsPerDay, col="red", lwd=2, lty=2)
+text(paste0("Mean steps per day =\n", round(meanStepsPerDay,0)), x=3000, y=15, col="red")
+
+medianStepsPerDay <- median(stepsByDay$steps)
+abline(v=medianStepsPerDay, col="blue", lwd=2, lty=2)
+text(paste0("Median steps per day =\n", round(medianStepsPerDay,0)), x=18000, y=15, col="blue")
+
+rug(stepsByDay$steps)
+```
+
+### Summary of steps by day
+```{r summary1, results="asis"}
+library(xtable)
+summary <- summary(stepsByDay$steps)
+print(xtable(t(summary), digits=0), type="html")
+
+```
 
 ## What is the average daily activity pattern?
 
+```{r}
+stepsByInterval <- 
+    group_by(activity, interval) %>%
+    summarise_each(funs(mean(., na.rm=TRUE)), -date)
+
+with(stepsByInterval, 
+     plot(interval, steps, type="l", xlab="5 min inteval", ylab="Average number of steps", 
+          main="Average number of steps by time interval"))
+```
 
 
 ## Imputing missing values
 
+```{r}
+x <- summary(sapply(activity$steps, is.na))
+naCount <- as.integer(x[["TRUE"]])
+totalCount <- as.integer(x[["FALSE"]]) + naCount
+naPerc <- naCount / totalCount * 100
+naPerc
+```
 
+Percentage of records with NA = `r round(naPerc, 1)`%
+
+Strategy - replace NAs with average for time interval.
+
+```{r}
+tmp <- right_join(activity, stepsByInterval, by=c("interval"="interval"), suffix=c(".orig",".imputed"))
+activity$imputedSteps <- ifelse(is.na(tmp$steps.orig), tmp$steps.imputed, tmp$steps.orig)
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
