@@ -20,29 +20,31 @@ str(activity)
 ```
 
 
-## What is mean total number of steps taken per day?
+## What is the mean total number of steps taken per day?
 
 ```{r stepsByDay}
 library(dplyr, warn.conflicts=FALSE)
 
+# Calculate the total number of steps for each day...
 stepsByDay <- 
     group_by(activity, date) %>%
     summarise_each(funs(sum(., na.rm=TRUE)), -interval)
 ```
 
-### Histogram of steps by day
-```{r hist1}
+```{r histogram1}
+# Show the histogram...
 hist(stepsByDay$steps, main="Histogram of steps per day", xlab="Daily steps", ylab="Frequency [Days]", breaks=15)
+rug(stepsByDay$steps)
 
+# Add vertical line for mean...
 meanStepsPerDay <- mean(stepsByDay$steps)
 abline(v=meanStepsPerDay, col="red", lwd=2, lty=2)
 text(paste0("Mean steps per day =\n", round(meanStepsPerDay,0)), x=3000, y=15, col="red")
 
+# Add vertical line for median...
 medianStepsPerDay <- median(stepsByDay$steps)
 abline(v=medianStepsPerDay, col="blue", lwd=2, lty=2)
 text(paste0("Median steps per day =\n", round(medianStepsPerDay,0)), x=18000, y=15, col="blue")
-
-rug(stepsByDay$steps)
 ```
 
 ### Summary of steps by day
@@ -50,71 +52,131 @@ rug(stepsByDay$steps)
 library(xtable)
 summary <- summary(stepsByDay$steps)
 print(xtable(t(summary), digits=0), type="html")
-
 ```
 
 ## What is the average daily activity pattern?
 
-```{r}
+```{r avgDailyActivityPttern}
+# Calculate the mean steps for each 5min interval...
 stepsByInterval <- 
     group_by(activity, interval) %>%
     summarise_each(funs(mean(., na.rm=TRUE)), -date)
+maxSteps <- max(stepsByInterval$steps)
+maxInterval <-
+    stepsByInterval[stepsByInterval$steps == maxSteps,]$interval
 
-with(stepsByInterval, 
+# ... and plot.
+with(stepsByInterval, {
      plot(interval, steps, type="l", xlab="5 min inteval", ylab="Average number of steps", 
-          main="Average number of steps by time interval"))
+          main="Average number of steps by time interval")
+     abline(v=maxInterval, lty=2, col="red")
+     text(paste0("Max steps=",as.integer(maxSteps),"\nInterval=", as.integer(maxInterval)), x=maxInterval + 500, y=maxSteps - 50, col="red")
+})
 ```
 
 
 ## Imputing missing values
 
-```{r}
+### Evaluation
+```{r imputeEval}
 x <- summary(sapply(activity$steps, is.na))
 naCount <- as.integer(x[["TRUE"]])
 totalCount <- as.integer(x[["FALSE"]]) + naCount
 naPerc <- naCount / totalCount * 100
-naPerc
 ```
 
-Percentage of records with NA = `r round(naPerc, 1)`%
+&nbsp; | Value
+--- | ---
+Total Count | `r totalCount`
+NA Count | `r naCount`
+Percentage NA | `r round(naPerc, 1)` %
 
-Strategy - replace NAs with average for time interval.
+> ### Missing values strategy
+> Step counts containing NA values will be replaced with the average for that time interval
+> using `stepsByInterval` from above.
 
-```{r}
+```{r impute}
+# Impute the NA values...
 imputed <- right_join(activity, stepsByInterval, by=c("interval"="interval"), suffix=c(".orig",".imputed"))
 imputed$steps <- ifelse(is.na(imputed$steps.orig), imputed$steps.imputed, imputed$steps.orig)
 imputed <- select(imputed, date, interval, steps)
 
+# Create a new data frame with the imputed values...
 activity2 <- 
     right_join(activity, imputed, by=c("date"="date","interval"="interval"), suffix=c(".orig",".imputed")) %>%
     mutate(steps = steps.imputed) %>%
     select(steps, date, interval)
-
-str(activity2)
 ```
 
-New histogram...
+### Results of imputing NAs
 
 ```{r hist2}
+# Calculate the new values for each interval...
 stepsByDay2 <- 
     group_by(activity2, date) %>%
     summarise_each(funs(sum(., na.rm=TRUE)), -interval)
-
-hist(stepsByDay2$steps, main="Histogram of steps per day", xlab="Daily steps", ylab="Frequency [Days]", breaks=15)
-
 meanStepsPerDay2 <- mean(stepsByDay2$steps)
+medianStepsPerDay2 <- median(stepsByDay2$steps)
+
+# Show new histogram...
+hist(stepsByDay2$steps, main="Histogram of steps per day", xlab="Daily steps", ylab="Frequency [Days]", breaks=15)
+rug(stepsByDay2$steps)
+
+# Add vertical lines for mean and median...
 abline(v=meanStepsPerDay2, col="red", lwd=2, lty=2)
 text(paste0("Mean steps per day =\n", round(meanStepsPerDay2,0)), x=3000, y=15, col="red")
-
-medianStepsPerDay2 <- median(stepsByDay2$steps)
 abline(v=medianStepsPerDay2, col="blue", lwd=2, lty=2)
 text(paste0("Median steps per day =\n", round(medianStepsPerDay2,0)), x=18000, y=15, col="blue")
-
-rug(stepsByDay2$steps)
 ```
 
-**Median increases** from `r medianStepsPerDay` to `r as.integer(medianStepsPerDay2, 0)` and 
-**mean increases** from `r as.integer(meanStepsPerDay)` to `r as.integer(meanStepsPerDay2, 0)`. 
-**Days with zero steps** falls.
+&nbsp; | With NAs | With Imputed Values
+--- | --- | ---
+Median steps | `r as.integer(medianStepsPerDay)` | `r as.integer(medianStepsPerDay2, 0)`
+Mean steps | `r as.integer(meanStepsPerDay)` | `r as.integer(meanStepsPerDay2, 0)`
+Total steps | `r as.integer(sum(stepsByDay$steps))` | `r as.integer(sum(stepsByDay2$steps))`
+
+> ### Conclusion
+> The mean and median both increase because the number of days without any steps drops from 10 to 1.
+> The **total number of steps increases by `r as.integer(sum(stepsByDay2$steps) - sum(stepsByDay$steps))`.**
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r fig.width=10, fig.height=6}
+# Add daytype factor to dataframe with imputed values...
+activity2$daytype <- 
+    as.factor(
+        ifelse(
+            weekdays(as.POSIXlt(activity2$date), abbreviate=TRUE) %in% c("Sat", "Sun"), 
+            "weekend", "weekday"))
+
+# Calcuate steps per interval for weekdays and weekends...
+stepsByIntervalAndDayType <- 
+    group_by(activity2, daytype, interval) %>%
+    summarise_each(funs(mean(., na.rm=TRUE)), -date)
+
+library(ggplot2)
+g <- ggplot(stepsByIntervalAndDayType, aes(interval, steps)) +
+    geom_line() +
+    facet_grid(daytype ~ .) + 
+    ggtitle("Average steps by interval") + 
+    xlab("Interval") +
+    ylab("Average steps")
+print(g)
+```
+
+```{r}
+weekdays <- subset(stepsByIntervalAndDayType, daytype=="weekday")
+avgWeekday <- mean(weekdays$steps)
+
+weekends <- subset(stepsByIntervalAndDayType, daytype=="weekend")
+avgWeekend <- mean(weekends$steps)
+```
+Days  | Mean steps per interval
+--- | ---
+Weekdays | `r as.integer(avgWeekday)`
+Weekends | `r as.integer(avgWeekend)`
+
+> ### Conclustion
+> More steps are taken (`r as.integer(avgWeekend)` versus `r as.integer(avgWeekday)` 
+> per interval) , on average, on weekend days and the steps are distributed
+> more evenly throughout the day.
