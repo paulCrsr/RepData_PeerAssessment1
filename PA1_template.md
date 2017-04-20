@@ -63,7 +63,7 @@ print(xtable(t(summary), digits=0), type="html")
 ```
 
 <!-- html table generated in R 3.3.2 by xtable 1.8-2 package -->
-<!-- Thu Apr 20 21:59:53 2017 -->
+<!-- Thu Apr 20 22:09:01 2017 -->
 <table border=1>
 <tr> <th>  </th> <th> Min. </th> <th> 1st Qu. </th> <th> Median </th> <th> Mean </th> <th> 3rd Qu. </th> <th> Max. </th>  </tr>
   <tr> <td align="right"> 1 </td> <td align="right"> 0 </td> <td align="right"> 6778 </td> <td align="right"> 10400 </td> <td align="right"> 9354 </td> <td align="right"> 12810 </td> <td align="right"> 21190 </td> </tr>
